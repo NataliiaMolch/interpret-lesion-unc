@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uncs-interp"
+version = "0.1.0"
+description = "Lesion-wise uncertainty feature extraction, ElasticNet interpretability, and counterfactual explanations for nnU-Net probability maps."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Nataliia Molchanova" }
+]
+dependencies = [
+  "joblib>=1.2",
+  "matplotlib>=3.5",
+  "nibabel>=4.0",
+  "numpy>=1.23",
+  "pandas>=1.4",
+  "scikit-learn>=1.1",
+  "scipy>=1.9",
+  "seaborn>=0.11",
+  "SimpleITK>=2.1",
+  "pyradiomics>=3.0"
+]
+
+[project.optional-dependencies]
+mni = ["antspyx>=0.3"]
+mriqc = ["mriqc"]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.scripts]
+uncs-interp = "uncs_interp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"

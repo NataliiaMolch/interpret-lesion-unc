@@ -1,0 +1,11 @@
+{
+  "atlases": [
+    {
+      "name": "MNI",
+      "root": "/path/to/atlases",
+      "left": "MNI-maxprob-thr0-1mm_L.nii.gz",
+      "right": "MNI-maxprob-thr0-1mm_R.nii.gz",
+      "labels_xml": "MNI.xml"
+    }
+  ]
+}

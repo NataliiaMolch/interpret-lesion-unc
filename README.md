@@ -1,96 +1,169 @@
-# interpret-lesion-unc
-Multiple sclerosis cortical lesion segmentation model on MP2RAGE - DE and MCDP uncertainty quantification - Lesion-scale uncertainty - Instance-wise uncertainty - Interpretability of lesion-scale uncertainty - Interpretability of instance-wise uncertainty
+# uncs-interp
 
-This repo contains implementations for this manuscript: [Arxiv](https://arxiv.org/abs/2407.05761). 
+Public toolkit for lesion-wise uncertainty interpretability from member-wise nnU-Net probability maps.
 
-## Requirements
+This repository is a complement to the paper *Explaining Uncertainty in Multiple Sclerosis Cortical Lesion Segmentation Beyond Prediction Errors*.
 
-The conda environment has been exported into requirements.txt. Python version 3.8.10.
+The package computes lesion-level uncertainty, segmentation-quality features when ground truth is available, multi-modal radiomics, MNI atlas overlap features, optional MRIQC IQMs, novelty features, ElasticNet interpretability models, and counterfactual reports asking:
 
-## Cortical lesion segmentation model
+> What would need to be different about this lesion for the model to be certain about it?
 
-Two models are adopted based on a similar 3D U-Net architecture: deep ensemble (DE) and Monte Carlo Dropout (MCDP).
+Code for the preliminary MICCAI iMIMIC research is available in the `miccai-imimic-2024` branch.
 
-Architecture details can be found in the [MONAI library documentation (v0.9.0)](https://docs.monai.io/en/0.9.0/networks.html#unet). 
+The nnU-Net v2 model weights used for the associated work are available on Zenodo: `10.5281/zenodo.19485057`.
 
-Hyperparameters:
+## Install
 
-| Hyperparameter      | Description                                |
-|---------------------|--------------------------------------------|
-| **Training** |
-| loss              | Focal weighted loss (weight 2e5, gamma 2)     |
-| scheduler         | Plateau (gamma 0.5, step_size 10)               |
-| initial learning rate     | 1e-2                   |
-| warmup iters      | 400             |
-| minimum learning rate      | 1e-7                 |
-| early stopping         | tolerance 1e-10, patience 100         |
-| epoch saving       | on maximal validation nDSC score          |
-| validation every n epochs | 1 |
-| n_epochs          | 400                  |
-| batch size        | 8                    |
-| **Data processing** |
-| input subvolumes shape | (96, 96, 96) |
-| subvolumes from a single scan         | 32     |
-| augmentation strategy        | [get_cltrain_transforms](utils/transforms.py)           |
-| inference preprocessing | intensity normalization |
-| inferer | [sliding window](https://docs.monai.io/en/0.9.0/inferers.html?highlight=SlidingWindowInferer#slidingwindowinferer), 25% overlap, gaussian weighting |
-| **Model** |
-| architecture | 3D U-Net
-| spatial_dims      | 3     |
-| in_channels       | 96        |
-| out_channels      | 1        |
-| channels          | (32, 64, 128, 256)             |
-| strides           | 2                          |
-| norm              | 'batch'      |
-| num_res_units     | 0         |
-| dropout           | 0.1 for MCDP, None for DE          |
-
-
-
-Model training code: [train.sh](bash_scripts/train.sh).
-
-Model inference code: [predict.sh](bash_scripts/predict.sh).
-
-
-**Model performance:**
-
-Model performance:
-
-| Set                             | Model    | DSC                               | F1-score (iou\_adj)               | Precision (iou\_adj)              | Recall (iou\_adj)                 | ECE bin                           |
-|---------------------------------|----------|-----------------------------------|-----------------------------------|-----------------------------------|-----------------------------------|-----------------------------------|
-| Train          | DE       | $0.640_{[0.599, 0.673]}$          | $0.798_{[0.752, 0.832]}$          | $0.878_{[0.829, 0.913]}$          | $0.760_{[0.711, 0.800]}$          | $0.004_{[0.004, 0.004]}$          |
-|                                 | MCDP     | $0.518_{[0.470, 0.559]}$          | $0.669_{[0.608, 0.720]}$          | $0.742_{[0.676, 0.796]}$          | $0.642_{[0.581, 0.698]}$          | $0.005_{[0.005, 0.005]}$          |
-| Val            | DE       | $0.541_{[0.428, 0.623]}$          | $0.676_{[0.598, 0.790]}$          | $0.751_{[0.621, 0.847]}$          | $0.642_{[0.559, 0.770]}$          | $0.004_{[0.004, 0.005]}$          |
-|                                 | MCDP     | $0.457_{[0.331, 0.538]}$          | $0.629_{[0.506, 0.752]}$          | $0.732_{[0.544, 0.851]}$          | $0.574_{[0.479, 0.724]}$          | $0.005_{[0.005, 0.006]}$          |
-| Test        | DE       | $0.385_{[0.308, 0.452]}$          | $0.549_{[0.442, 0.638]}$          | $0.622_{[0.496, 0.730]}$          | $0.555_{[0.446, 0.648]}$          | $0.004_{[0.004, 0.004]}$          |
-|                                 | MCDP     | $0.338_{[0.266, 0.404]}$          | $0.485_{[0.382, 0.575]}$          | $0.588_{[0.460, 0.702]}$          | $0.488_{[0.381, 0.587]}$          | $0.005_{[0.005, 0.005]}$          |
-
-
-# Lesion uncertainty regression
-
-Lesion uncerainty computation: [precompute_les_uncs.sh](bash_scripts/precomute_les_uncs.sh) -- "ddu" measure in the saved dictionaty.
-
-Uncertainty regression model: [Elasticnet](uncertainty_regression/elasticnet_repeated_cv.py).
-
-Uncertainty regression quality:
-
-|       Uncertainty         | CV Only IoU$_{adj}$       | CV No IoU$_{adj}$           | CV All                 | Test Only IoU$_{adj}$    | Test No IoU$_{adj}$      | Test All                 |
-|---------------------|------------------------|--------------------------|---------------------|------------------------|--------------------------|--------------------------|
-| DE                  | $0.520_{\pm 0.006}$    | $0.598_{\pm 0.004}$      | $0.661_{\pm 0.004}$ | $0.431_{\pm 0.001}$    | $0.512_{\pm 0.002}$      | $0.632_{\pm 0.004}$ |
-| MCDP                | $0.393_{\pm 0.006}$    | $0.589_{\pm 0.014}$      | $0.604_{\pm 0.013}$ | $0.261_{\pm 0.003}$ | $0.425_{\pm 0.013}$ | $0.494_{\pm 0.004}$ |
-
-# References
-
+```bash
+cd interpret-lesion-unc
+python -m pip install -e .
 ```
-@misc{molchanova2024,
-      title={Interpretability of Uncertainty: Exploring Cortical Lesion Segmentation in Multiple Sclerosis}, 
-      author={Nataliia Molchanova and Alessandro Cagol and Pedro M. Gordaliza and Mario Ocampo-Pineda and Po-Jui Lu and Matthias Weigel and Xinjie Chen and Adrien Depeursinge and Cristina Granziera and Henning Müller and Meritxell Bach Cuadra},
-      year={2024},
-      eprint={2407.05761},
+
+For MNI registration/location features, install the optional ANTs dependency:
+
+```bash
+python -m pip install -e ".[mni]"
+```
+
+## Expected Inputs
+
+The dataset should follow the nnU-Net v2 layout:
+
+```text
+DatasetXXX_Name/
+  dataset.json
+  imagesTs/
+    case_001_0000.nii.gz
+    case_001_0001.nii.gz
+  labelsTs/                 # optional
+    case_001.nii.gz
+```
+
+Predictions should be one directory per model member/fold. Each directory must contain `case_id.npz`, `case_id.nii.gz`, or `case_id.nii`. For `.npz`, keys named `probabilities`, `softmax`, `pred_probs`, or `arr_0` are supported. If the array is 4D, `--class-index` selects the lesion class.
+
+## Feature Extraction
+
+```bash
+uncs-interp extract-features \
+  --dataset-dir /path/to/DatasetXXX_Name \
+  --predictions /path/to/fold_0 /path/to/fold_1 /path/to/fold_2 /path/to/fold_3 /path/to/fold_4 \
+  --labels-subdir labelsTs \
+  --output-csv outputs/features.csv \
+  --ensemble-threshold 0.5
+```
+
+Ground truth is optional. Without `--labels-subdir`, IoU/IoUadj and lesion type are skipped, but uncertainty, radiomics, location, MRIQC, and novelty-compatible features can still be computed.
+
+To include MNI-derived location features:
+
+```bash
+uncs-interp extract-features \
+  --dataset-dir /path/to/DatasetXXX_Name \
+  --predictions /path/to/fold_0 /path/to/fold_1 \
+  --output-csv outputs/features_mni.csv \
+  --atlas-config configs/example_atlas_config.json \
+  --fixed-mni /path/to/MNI152lin_T1_1mm_brain.nii.gz \
+  --transforms-dir /path/to/transforms \
+  --transform-pattern "{case_id}_to_mni.mat"
+```
+
+If transforms are missing and ANTs is installed, add `--register-missing-transforms` to compute affine transforms from the first nnU-Net channel to MNI.
+
+## MRIQC
+
+MRIQC is intentionally run outside this package. Generate a command:
+
+```bash
+uncs-interp mriqc-command --bids-dir /path/to/bids --output-dir outputs/mriqc
+```
+
+Then select the IQMs used in the analysis:
+
+```bash
+uncs-interp select-mriqc \
+  --input-csv outputs/mriqc/group_T1w.tsv \
+  --output-csv outputs/mriqc_selected.csv
+```
+
+Pass the selected CSV to feature extraction with `--mriqc-csv`.
+
+## Novelty Features
+
+Use the training split as the reference distribution:
+
+```bash
+uncs-interp add-novelty \
+  --reference-csv outputs/train_features.csv \
+  --target-csv outputs/test_features.csv \
+  --output-csv outputs/test_features_with_novelty.csv
+```
+
+## ElasticNet Interpretability
+
+Train without IoUadj:
+
+```bash
+uncs-interp train-elasticnet \
+  --train-csv outputs/train_features.csv \
+  --model-out outputs/elasticnet.joblib
+```
+
+Train with IoUadj as an explanatory feature:
+
+```bash
+uncs-interp train-elasticnet \
+  --train-csv outputs/train_features.csv \
+  --model-out outputs/elasticnet_with_iou.joblib \
+  --include-iou-adj
+```
+
+The command writes:
+
+- `elasticnet.joblib`: trained model artifact
+- `elasticnet.feature_importance.csv`: selected ElasticNet coefficients
+- `elasticnet.metrics.csv`: cross-validation and training metrics
+
+## Counterfactual Explanations
+
+Given a trained model and features for a new scan:
+
+```bash
+uncs-interp counterfactual \
+  --model outputs/elasticnet.joblib \
+  --features-csv outputs/new_scan_features.csv \
+  --output-csv outputs/new_scan_counterfactuals.csv \
+  --target-uncertainty 0
+```
+
+The output ranks one-feature counterfactuals by the smallest required change. These are descriptive explanations of model behavior, not clinically actionable instructions.
+
+## Important Notes
+
+- Probability thresholds default to `0.5`; pass `--member-thresholds thresholds.json` for fold/member-specific thresholds.
+- Multiple MRI modalities are supported through nnU-Net channel files and `dataset.json` channel names.
+- PyRadiomics features are computed for each predicted lesion, its surrounding region, and patient-level predicted lesion/brain regions.
+- MNI atlas features require either existing transforms or optional ANTs-based affine registration.
+- IoUadj follows the adjusted IoU definition from the research code and is only available when ground truth labels are provided.
+
+## Citation
+
+If you use this repository, please cite:
+
+```bibtex
+@misc{molchanova2026explaininguncertaintymultiplesclerosis,
+      title={Explaining Uncertainty in Multiple Sclerosis Cortical Lesion Segmentation Beyond Prediction Errors}, 
+      author={Nataliia Molchanova and Pedro M. Gordaliza and Alessandro Cagol and Mario Ocampo--Pineda and Po--Jui Lu and Matthias Weigel and Xinjie Chen and Erin S. Beck and Haris Tsagkas and Daniel Reich and Anna Stölting and Pietro Maggi and Delphine Ribes and Adrien Depeursinge and Cristina Granziera and Henning Müller and Meritxell Bach Cuadra},
+      year={2026},
+      eprint={2504.04814},
       archivePrefix={arXiv},
       primaryClass={eess.IV},
-      url={https://arxiv.org/abs/2407.05761}, 
+      url={https://arxiv.org/abs/2504.04814}, 
 }
+```
+
+Related work:
+
+```bibtex
 @inproceedings{molchanovaiee2023,
    title={Novel Structural-Scale Uncertainty Measures and Error Retention Curves: Application to Multiple Sclerosis},
    url={http://dx.doi.org/10.1109/ISBI53787.2023.10230563},
@@ -101,6 +174,7 @@ Uncertainty regression quality:
    year={2023},
    month=apr 
 }
+
 @misc{molchanova2024preprint,
       title={Structural-Based Uncertainty in Deep Learning Across Anatomical Scales: Analysis in White Matter Lesion Segmentation}, 
       author={Nataliia Molchanova and Vatsal Raina and Andrey Malinin and Francesco La Rosa and Adrien Depeursinge and Mark Gales and Cristina Granziera and Henning Muller and Mara Graziani and Meritxell Bach Cuadra},
@@ -111,7 +185,3 @@ Uncertainty regression quality:
       url={https://arxiv.org/abs/2311.08931}, 
 }
 ```
-
-# License
-
-This work is protected by [CC BY-NC-SA 4.0 License](LICENSE). This license enables reusers to distribute, remix, adapt, and build upon the material in any medium or format for noncommercial purposes only, and only so long as attribution is given to the creator. If you remix, adapt, or build upon the material, you must license the modified material under identical terms.
